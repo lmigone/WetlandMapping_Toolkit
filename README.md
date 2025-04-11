@@ -75,22 +75,18 @@ The Python script processes a series of wetland-oriented LULC classifications to
      It can handle more non-wetland classes, but modifications are needed if the number of wetland classes changes.
    - The script is designed to use an **input layer containing river channel delineation** and to consider **woody areas around river channels as wetlands**. This step can be disabled if required.
 
-## Installation and Dependencies
-To use the scripts in this repository, ensure you have the following dependencies installed:
-
+## **Dependencies**
 ### **GEE Scripts**
 - Google Earth Engine account and access to GEE Code Editor.
 
 ### **Python Script**
-#### **Required Libraries**
-Install required dependencies using:
-- numpy
-- geopandas
-- scipy
-- pandas
-- rasterio
-- skimage
-- shapely
+This project uses the following Python libraries:
+- numpy	(for numerical operations)
+- geopandas (for handling geospatial vector data)
+- scipy	(for scientific computing (signal/stats))
+- rasterio	(for reading/writing geospatial rasters)
+- skimage (for image segmentation and analysis)
+- shapely (for geometric objects and operations)
 
 ## How to Cite
 If you use this repository in your research, please cite:
