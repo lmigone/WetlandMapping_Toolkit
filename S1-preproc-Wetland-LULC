@@ -1,6 +1,6 @@
 /*==============================================================================================
   TITLE: Sentinel 1 preprocessing for Wetland-oriented LULC classification
-  AUTHORS: Lucía Migone, Facundo Schivo, Santiago Verón and Rafael Grimson
+  AUTHORS: Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R.
   EMAIL: lmigone@unsam.edu.ar
   
   DESCRIPTION: This script generates and exports the SAR input for the wetland-oriented LULC classification.
@@ -8,9 +8,9 @@
   computes seasonal and annual descriptors and saves them as assets.
   
   For a detailed explanation of the methodology, please refer to the associated paper:
-  [insert citation here].
+  PENDING PUBLICATION
     
-  DATE: [YYYY-MM-DD] 
+  DATE: [2025-04-11] 
 ==============================================================================================*/
 var roi = '' #Import or define FeatureCollection with ROI
 
@@ -132,5 +132,3 @@ Export.image.toAsset({
     maxPixels: 1e13,
     crs: targetCrs
 });
-
-/**/
