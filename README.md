@@ -94,7 +94,7 @@ If you use this repository in your research, please cite:
 Pending publication.
 
 ## License
-This repository is licensed under the GPL licence
+This repository is licensed under the GNU AGPL v3.0
 
 ## Acknowledgments
 We acknowledge the support of Consejo Nacional de Investigaciones Científicas y Técnicas (CONICET) and Universidad Nacional de San Martín (UNSAM), to develop this repository.
