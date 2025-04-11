@@ -1,14 +1,14 @@
 # WetlandMapping_Toolkit
 ## Mapping Drier-End Wetlands Using Land Use/Land Cover (LULC) Classifications
 
-This repository contains Google Earth Engine (GEE) and Python code for drier-end wetland mapping, as presented in:
+This repository contains Google Earth Engine (GEE) and Python code for drier-end wetland mapping:
 
-**Migone, L., Schivo, F., Verón, S., and Grimson, R. (2025). XXXXX**
+Authors: **Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R. (2025)** Pending publication.
 
 ## Repository Overview
 
 ### GEE Code
-This repository contains two Google Earth Engine (GEE) scripts: **S1-preproc-Wetland-RF-LULC** and **wetland-RF-LULC**. Both scripts generate annual and seasonal features for a single year, with the default period running from June 21st (the start of winter in the Southern Hemisphere) to June 20th of the following year (the end of autumn). Each script should be run once per year to generate its Land Use/Land Cover (LULC) classification.
+This repository contains two Google Earth Engine (GEE) scripts: **S1-preproc-Wetland-LULC** and **Annual-Wetland-LULC**. Both scripts generate annual and seasonal features for a single year, with the default period running from June 21st (the start of winter in the Southern Hemisphere) to June 20th of the following year (the end of autumn). Each script should be run once per year to generate its Land Use/Land Cover (LULC) classification.
 
 #### S1-preproc-Wetland-RF-LULC
 This script preprocesses Sentinel-1 imagery by applying:
@@ -95,7 +95,7 @@ Install required dependencies using:
 ## How to Cite
 If you use this repository in your research, please cite:
 
-Migone, L., Schivo, F., Verón, S., and Grimson, R. (2025). XXXXX
+Pending publication.
 
 ## License
 This repository is licensed under the GPL licence
