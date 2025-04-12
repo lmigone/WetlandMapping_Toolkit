@@ -10,7 +10,7 @@ Authors: **Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R. (20
 ### GEE Code
 This repository contains two Google Earth Engine (GEE) scripts: **S1-preproc-Wetland-LULC** and **Annual-Wetland-LULC**. Both scripts generate annual and seasonal features for a single year, with the default period running from June 21st (the start of winter in the Southern Hemisphere) to June 20th of the following year (the end of autumn). Each script should be run once per year to generate its Land Use/Land Cover (LULC) classification.
 
-#### S1-preproc-Wetland-RF-LULC
+#### S1-preproc-Wetland-LULC
 This script preprocesses Sentinel-1 imagery by applying:
 - **Border noise correction**
 - **Speckle filtering**
@@ -22,7 +22,7 @@ It then derives the following features from VV, VH, and VV/VH bands:
 
 The processed image, containing all the generated bands, is exported to GEE Assets for later use in **wetland-RF-LULC**. This separation prevents exceeding GEE’s free processing memory limits.
 
-#### wetland-RF-LULC
+#### Annual-wetland-LULC
 This script generates the LULC classification using a **Random Forest classifier**.
 
 1. **Input Features:**
@@ -44,7 +44,7 @@ This script generates the LULC classification using a **Random Forest classifier
    - **GeoTIFF file** – Final LULC classification.
    - **CSV file** – Feature importance values from the Random Forest model.
 
-### Python Code
+### Python Code - LULCtoWetlandsMaps_Postprocesing
 The Python script processes a series of wetland-oriented LULC classifications to generate a final wetlands map.
 
 **NOTE 1**: This script is set to work with **8 LULC classifications (8 years classified)**, each containing **8 LULC classes**. However, it can be adapted for a different number of years or classes.  
