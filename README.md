@@ -3,7 +3,7 @@
 
 This repository contains Google Earth Engine (GEE) and Python code for drier-end wetland mapping:
 
-Authors: **Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R. (2025)** Pending publication.
+Authors: **Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R. (2025)**
 
 ## Repository Overview
 
@@ -27,8 +27,8 @@ This script generates the LULC classification using a **Random Forest classifier
 
 1. **Input Features:**
    - **Topography-derived features**: Generated externally and imported as GEE Assets.  
-     - The sample script includes the **Topographic Position Index (TPI)** from a LiDAR DEM, computed with 200m and 500m radii (TPI200 and TPI500).  
-     - It also computes **GLCM texture descriptors**: sum average (savg), variance (var), and contrast.
+     - The sample script contemplates the incorporation of **Topographic Position Index (TPI)** computed from a LiDAR DEM, with 200m and 500m radii (TPI200 and TPI500).  
+     - It also computes **GLCM texture descriptors**: sum average (savg), variance (var), and contrast for each TPI.
    - **Sentinel-1 Derived Features**: Preprocessed with **S1-preproc-Wetland-RF-LULC**.
    - **Sentinel-2 Derived Features**: Obtained from the GEE repository.  
      - The script computes the following spectral indices: **NDVI, NDWI, CVI, MNDWI1, MNDWI2, and SAVI**.  
@@ -49,14 +49,14 @@ The Python script processes a series of wetland-oriented LULC classifications to
 
 **NOTE 1**: This script is set to work with **8 LULC classifications (8 years classified)**, each containing **8 LULC classes**. However, it can be adapted for a different number of years or classes.  
 
-**NOTE 2**: Due to the high RAM usage of some steps, it is recommended **not to run the entire script at once**, but rather in stages (as suggested in comments within the script).
+**NOTE 2**: Due to the high RAM usage of some steps, it is **recommended not to run the entire script at once**, but rather in stages (as suggested in comments within the script).
 
 1. **Input Layers:**
-   - A series of **LULC classifications** stored as GeoTIFF files (which may be generated with the GEE code).
-   - A **GeoJSON file** containing the delineation of river channels.
+   - A series of **Anual LULC maps** stored as GeoTIFF files (which may be generated with the GEE code).
+   - A **GeoJSON file** containing a map of rivers within the study area.
 
 2. **Labeling Considerations:**
-   - The script reads LULC classifications from a **single directory**, which should contain only classification GeoTIFF files.
+   - The script reads Annual LULC maps from a **single directory**, which should contain only the target Annual LULC maps as GeoTIFF files.
    - The script generates a series of raster and vector images as **final or intermediate products**. To organize them, it creates structured output directories.
    - All output file names include:
      - A **name prefix** (`fn_prefix`)
@@ -64,7 +64,7 @@ The Python script processes a series of wetland-oriented LULC classifications to
      - A **running date** (`running_date`)
 
 3. **Filtering Parameter Considerations:**
-   - These parameters can be adapted to better fit the characteristics or requirements of the landscape where the classification is applied.
+   - These parameters can be adapted to better fit the characteristics or requirements of the landscape where the methodology is applied.
 
 4. **LULC Classes Considerations:**
    - LULC classes should be identified by **integers** (e.g., Class "Crops" = 5). Any integer will work, but ensure that the class definitions are clearly documented within the script.
@@ -73,7 +73,7 @@ The Python script processes a series of wetland-oriented LULC classifications to
      - **1 woody vegetation class**
      - **4 non-wetland classes**  
      It can handle more non-wetland classes, but modifications are needed if the number of wetland classes changes.
-   - The script is designed to use an **input layer containing river channel delineation** and to consider **woody areas around river channels as wetlands**. This step can be disabled if required.
+   - The script is designed to use an **input layer containing a rivers map** and to consider **woody areas around rivers as wetlands**. This step can be disabled if required.
 
 ## **Dependencies**
 ### **GEE Scripts**
