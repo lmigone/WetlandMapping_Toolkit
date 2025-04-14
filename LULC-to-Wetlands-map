@@ -1,0 +1,765 @@
+TITLE: LULC to wetlands map - Python module for post-processing LULC classifications
+ AUTHORS: Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R.
+ EMAIL: lmigone@unsam.edu.ar
+ LICENSE: GNU AGPL v3.0
+ DATE: April 2025
+ For a detailed explanation of the methodology, please refer to the associated paper:
+ PENDING PUBLICATION.
+ 
+ ## Script summary:
+ 
+ This Python script performs the complete post-processing workflow to transform 
+ a series of annual Land Use/Land Cover (LULC) classifications into a final 
+ Wetland Map.
+ It is specifically adapted for a classification scheme with 8 LULC classes 
+ (`LULC_classes`) across 8 years, but it can be modified to accommodate other 
+ class counts or time spans.
+ Due to the memory-intensive nature of some processing steps, it is **recommended 
+ to execute the script in stages**, as suggested in the inline comments.
+ 
+ ### Input: File Names and Directories
+ 
+ - `source`: `{str}` Path to the main working directory.
+ - `annual_lulc_dir`: `{str}` Directory containing annual LULC maps as GeoTIFF files.
+ - `fn_prefix`: `{str}` Prefix to use in naming output files.
+ - `years_covered`: `{str}` Suffix to include in filenames to represent the years included (use `''` to leave empty).
+ - `running_date`: `{str}` A string used to tag the version or date of execution (e.g., `'2025-04'`).
+ - `river_fn`: `{str}` Filename of the shapefile containing river outlines.
+ - `output_shp_crs`: `{str}` Target coordinate reference system for shapefile outputs (e.g., `'EPSG:32721'`).
+ 
+ ### Input: Filtering Parameters
+ 
+ - `years_classified`: `{int}` Number of years with classified LULC data.
+ - `min_wetl_size`: `{int}` Minimum area (in pixels) for a wetland unit to be retained in the final mask.
+ - `max_wetl_hole`: `{int}` Maximum area (in pixels) of a non-wetland "hole" allowed within wetland units.
+ - `mean_fp_ext`: `{int}` Approximate average width (in meters) of floodplain zones considered for woody floodplain wetlands.
+ - `max_river_dist`: `{int}` Maximum buffer distance (in meters) from rivers to search for woody wetland patches.
+ - `bksl`: `{list[int]}` List of kernel sizes to apply during morphological filtering of binary wetland masks.
+ - `ponds_ks`: `{int}` Kernel size for pond filtering.
+ 
+ ### Input: LULC Class Information
+ 
+ - `wetland_class_list`: `{list[int]}` List of pixel values corresponding to wetland classes (e.g., `[2, 4, 8]`). The order reflects priority in mode-based reclassification.
+ - `all_non_wetland_class_list`: `{list[int]}` List of all non-wetland class pixel values (e.g., `[1, 3, 5, 6, 7]`).
+ - `non_wetland_class_list_ww`: `{list[int]}` Non-wetland class values **excluding** woody vegetation (e.g., `[1, 3, 6, 7]`).
+ - `woody_class`: `{int}` Pixel value corresponding to woody vegetation (e.g., `5`).
+ - `artificial_wetland_class`: `{int}` Pixel value representing artificial wetland classes.
+ 
+ """
+ 
+ #%% 0) Imports - ALWAYS RUN
+ import os
+ import numpy as np
+ import geopandas as gpd
+ from scipy import signal, stats
+ 
+ import rasterio
+ from rasterio.mask import mask
+ from rasterio.features import shapes, geometry_mask
+ 
+ from skimage.measure import label, regionprops
+ 
+ import shapely
+ from shapely.geometry import shape
+ 
+ #%% 0) Data sources and parameter specifications  - ALWAYS RUN
+ source = ''#Complete with working directory
+ os.chdir(source)
+ 
+ #Files and directory names and paths and related
+ annual_lulc_dir = ''
+ river_fn = ''
+ fn_prefix = ''
+ years_covered = '' 
+ running_date = '' 
+ 
+ #Filtering and crs parameters
+ years_classified = 8
+ min_wetl_size = 30
+ max_wetl_hole = 10
+ mean_fp_ext = 150
+ max_river_dist = 20
+ bksl = [1,2,3,4,5] 
+ ponds_ks = 2
+ output_shp_crs = "EPSG:32721"
+ 
+ #LULC classes information
+ wetland_class_list = [2, 4, 8] #All wetland classes in order of priority: Ponds, Wet meadows, then Artificial wetlands
+ all_non_wetland_class_list = [1, 3, 5, 6, 7] #All non wetland classes
+ woody_class = 5 #woody class value
+ non_wetland_class_list_ww = [1, 3, 6, 7] #Non wetland classes without woody
+ 
+ #%% 0) Name definitions - ALWAYS RUN
+ """
+ In this code cell file names are generated and assign to labels. Can be customised
+ to suit users preference. But changing the variable names implies changes in 
+ other parts of this script
+ 
+ """
+ #Output directory names
+ binary_dir = annual_lulc_dir + '_binary'
+ reclassified_dir = annual_lulc_dir + '_reclass'
+ intermediate_raster_files_dir = annual_lulc_dir + '_intermidiate-tifs'
+ intermediate_shape_files_dir = annual_lulc_dir + '_intermidiate-shapefiles'
+ final_raster_files_dir = annual_lulc_dir + '_final-tifs'
+ final_shape_files_dir = annual_lulc_dir + '_final-shapefiles'
+ 
+ #Frequency map and Wetlands mask
+ binary_sum_fn = os.path.join(intermediate_raster_files_dir,fn_prefix + years_covered + '_BinSum' + running_date +'.tif') #Raw binary sum fn
+ wet_freq_fn = os.path.join(final_raster_files_dir, fn_prefix + years_covered + '_WetlFreq' + running_date +'.tif')
+ wet_freq_filt1_fn = os.path.join(intermediate_raster_files_dir,fn_prefix + years_covered + '_WetlFreq_Convx5_bin_Del30Fill10' + running_date + '.tif') #First wetland mask
+ 
+ ##LULC map
+ mode_fn =  os.path.join(final_raster_files_dir, fn_prefix + years_covered + '_reclas_ModeFrec' + running_date +'.tif') #Raw mode raster
+ mode_filt1_fn =  os.path.join(intermediate_raster_files_dir, fn_prefix + years_covered + '_reclas_len_ModeFrec_FiltWetl' + running_date +'.tif') # Raw mode raster filtered by First wetland mask
+ 
+ #Ponds map
+ ponds_fn = os.path.join(final_raster_files_dir, fn_prefix + years_covered + '_reclas_len_ModeFreq_FiltWetl_PLWfilt4' + running_date + '.tif') #Final Ponds map (raster)
+ ponds_shp_fn = os.path.join(final_shape_files_dir, fn_prefix + years_covered + '_reclas_len_ModeFreq_FiltWetl_PLWfilt4' + running_date + '.shp') #Final Ponds map (vector)
+ 
+ #Artificial wetlands map
+ artificial_wetlands_fn = os.path.join(final_raster_files_dir, fn_prefix + years_covered + '_reclas_len_ModeFreq_FiltWetlAWfilt2' + running_date + '.tif') #Final Artificial wetlands map (raster)
+ artificial_wetlands_shp_fn = os.path.join(final_shape_files_dir, fn_prefix + years_covered + '_reclas_len_ModeFreq_FiltWetlAWfilt2' + running_date + '.shp') #Final Artificial wetlands (vector)
+ 
+ wo_fn = os.path.join(intermediate_raster_files_dir, fn_prefix + years_covered + '_reclas_WoodySel_Filt' + running_date +'.tif') #Woody floodplain wetland areas (raster)
+ clipped_w_raster_fn = os.path.join(intermediate_raster_files_dir, fn_prefix + years_covered + '_reclas_WoodySel' + running_date +'.tif')
+ 
+ #Wetlands map
+ all_wl_ud_fn = os.path.join(final_raster_files_dir, fn_prefix + years_covered + '_BinSum_Convx5_bin_Del30Fill10_mergeFill20_W-NW' + running_date + '.tif') #All wetlands merged (raster)
+ all_wl_ud_shp_fn = os.path.join(final_shape_files_dir, fn_prefix + years_covered + '_BinSum_Convx5_bin_Del30Fill10_mergeFill20_W-NW' + running_date + '.shp') #All wetlands merged (vector)
+ all_wl_d_fn = os.path.join(final_raster_files_dir, fn_prefix + years_covered + '_BinSum_Convx5_bin_Del30Fill10_mergeFill20_WTypes' + running_date + '.tif') #All wetlands diferenciated (raster)
+ all_wl_d_shp_fn = os.path.join(final_shape_files_dir, fn_prefix + years_covered + '_BinSum_Convx5_bin_Del30Fill10_mergeFill20_WTypes' + running_date + '.shp') #All wetlands diferenciated (vector)
+ 
+ 
+ #Create directories if needed
+ if not os.path.isdir(intermediate_raster_files_dir):
+     os.mkdir(intermediate_raster_files_dir)
+     
+ if not os.path.isdir(intermediate_shape_files_dir):
+     os.mkdir(intermediate_shape_files_dir)
+     
+ if not os.path.isdir(final_raster_files_dir):
+     os.mkdir(final_raster_files_dir)
+     
+ if not os.path.isdir(final_shape_files_dir):
+     os.mkdir(final_shape_files_dir)
+     
+ #%% 0) Definition of functions to use - ALWAYS RUN
+ def binarize_LULC(input_file, output_file, wetland_class_list, all_non_wetland_class_list):
+     # Open the input GeoTIFF file
+     with rasterio.open(input_file) as src:
+         # Read the data from the first band
+         data = src.read(1)
+         
+         # Create a mask for values to be set to 1
+         mask_one = np.isin(data, wetland_class_list)
+         
+         # Create a mask for values to be set to 0
+         mask_zero = np.isin(data, all_non_wetland_class_list)
+         
+         # Initialize the output data array with the original data
+         output_data = data.copy()
+         
+         # Apply the masks
+         output_data[mask_one] = 1
+         output_data[mask_zero] = 0
+         
+         # Write the modified data to a new GeoTIFF file
+         with rasterio.open(
+             output_file,
+             'w',
+             driver='GTiff',
+             height=src.height,
+             width=src.width,
+             count=1,
+             dtype=rasterio.uint8,  # Assuming the output is binary (0 and 1)
+             crs=src.crs,
+             transform=src.transform
+         ) as dst:
+             dst.write(output_data, 1)
+ 
+ def stack_clasif(img_data_dir, mbb=None, verbose = True):
+     ls = os.listdir(img_data_dir)
+     clasifs = []
+     for fn in ls:
+         if fn[-4:] == '.tif':
+             print(fn)        
+             with rasterio.open(img_data_dir + '/'+fn) as src:
+                 crs=src.crs 
+                 if mbb: #Clip if mbb provided
+                     array, out_transform = mask(src, mbb, crop=True)
+                 else:
+                     array = src.read()
+                     out_transform = src.transform
+             clasifs.append(array)
+     return np.vstack(clasifs), crs, out_transform
+ 
+ def make_circle_kernel(r):
+     C = np.zeros([2*r+1,2*r+1],dtype=np.byte)
+     for i in range(r):
+         for j in range(r):
+             if np.sqrt((i+1)*(i+1)+(j+1)*(j+1))<=r+0.4:
+                 C[r-i-1,r-j-1]=1
+                 C[r-i-1,r+j+1]=1
+                 C[r+i+1,r-j-1]=1
+                 C[r+i+1,r+j+1]=1
+     for i in range(r):
+         C[r,r-i-1]=1
+         C[r,r+i+1]=1
+         C[r+i+1,r]=1
+         C[r-i-1,r]=1
+     C[r,r]=1
+     return C    
+ 
+ def save_GTiff(fn, crs, transform, mat, meta=None, nodata=None, bandnames=[], verbose = True):
+     if len(mat.shape)==2:
+         count=1
+     else:
+         count=mat.shape[0]
+     if verbose: print(f'Saving GeoTIFF of {count} bands: {os.path.split(fn)[1]}.')
+ 
+ 
+     if not meta:
+         meta = {}
+ 
+     meta['driver'] = 'GTiff'
+     meta['height'] = mat.shape[-2]
+     meta['width'] = mat.shape[-1]
+     meta['count'] = count
+     meta['crs'] = crs
+     meta['transform'] = transform
+ 
+     if 'dtype' not in meta: #if no datatype is specified, use float32
+         meta['dtype'] = np.float32
+     
+ 
+     if nodata==None:
+         pass
+     else:
+         meta['nodata'] = nodata
+ 
+     with rasterio.open(fn, 'w', **meta) as dst:
+         if count==1: 
+             dst.write(mat.astype(meta['dtype']), 1)
+             if bandnames:
+                 dst.set_band_description(1, bandnames[0])
+         else: 
+             for b in range(count):
+                 dst.write(mat[b].astype(meta['dtype']), b+1)
+             for b,bandname in enumerate(bandnames):
+                 dst.set_band_description(b+1, bandname)#   
+ 
+ def filter_clusters(image_arr, clust_size, class_value = 1, connectivity=1, save = False, 
+                      fn_out = '', crs = None, gt = None, bandname = 'Filtered',
+                      fill_gaps = False, verbose = True):
+     """
+     Filter clusters filters raster images and erases pixel clusters smaller than a given size.
+     
+     Inputs:
+     image: (numpy array) the array of the band with numerical classes of an 
+     image (2 dimensions).It must be a binary array, where 0 = backround and 1 = class.
+     connectivity: (int)(skimage.measure.label connectivity) Possible values: 1 y 2. Defaults to 1.
+     clust_size: (int) max size of clusters to delete, expressed as the number of pixels it contains.
+     save: (bool) if True, it saves the filtered image.
+     crs: image's crs (only needed to save filtered image)
+     gt: image's geotransform (only needed to save filtered image)
+     bandname: (string) Name for the band with the filtered array (only needed to save filtered image) 
+     
+     To delete gaps within units, use: image = 1 - array, then do 1 - output_array.
+     This must be done by running 2 times filter_clusters. One with fill_gaps = False
+     then another with fill_gaps = True
+     
+     Outpur:
+     output_array: 2D numpy array where clusters smaller than clust_size are deleted.
+     """  
+     image = (image_arr == class_value)*1
+     if fill_gaps:
+         image = 1-(image_arr == class_value)*1
+     
+     label_img = label(image, connectivity=  1)
+     
+     #pixelcoount identifies pixel clusters
+     def pixelcount(regionmask):
+         return np.sum(regionmask)
+     props = regionprops(label_img, extra_properties=(pixelcount,)) 
+     if verbose: print('Regionprops: Done')
+     
+     #Adjust data to get as image
+     largo = len(props)
+     props_arr = np.full((2,largo),0)
+     
+     labels = props_arr[0]
+     pixel_counts = props_arr[1]
+     
+     for i, l in enumerate(labels):
+         labels[i] = props[i].label
+         pixel_counts[i] = props[i].pixelcount
+         
+     props_dic = dict(zip(labels, pixel_counts))
+     if verbose: print('props_dic: Done')
+     
+     try:
+         new_img = np.full((2,label_img.shape[0], label_img.shape[1]),55) #55 to detect errrors
+     except TypeError:
+         print('Make sure image_arr is 2D')
+         return
+     
+     try:    
+         new_img[0] = label_img 
+     except ValueError:
+         print('Make sure image_arr is 2D')
+         return
+     
+     props_arr_img = new_img.copy() 
+     
+    
+     for p, k in enumerate(props_arr_img[0]):
+         for q, j in enumerate(k):
+             if props_arr_img[0,p,q] == 0:
+                 props_arr_img[1,p,q] = 0  
+             else:
+                 props_arr_img[1,p,q] = props_dic[props_arr_img[0,p,q]] 
+     if verbose: print('New_image: Done')
+     
+     array_pxct = props_arr_img.copy()
+     array_pxct[1] = (props_arr_img[1]>clust_size)*1
+     output_array = array_pxct[1]
+     if fill_gaps:
+         output_array = 1- (array_pxct[1])
+         if verbose: print(f'Gaps smaller than {clust_size} pixels were deleted') 
+     else:
+         if verbose: print(f'Clusters smaller than {clust_size} pixels were deleted')      
+     
+     if save:
+         sv_output_array = np.vstack(output_array)
+         save_GTiff(fn_out, crs, gt, sv_output_array, bandnames=[bandname])
+         if verbose: print(f'{fn_out} was succesfully saved')
+         
+     return output_array
+ 
+ def compute_mode(img_stack):
+     mode = stats.mode(img_stack, axis=0)
+     mode_arr = np.array(mode[0])
+     freq_arr = np.array(mode[1])
+     return np.stack((mode_arr, freq_arr))
+ 
+ def polygonator (raster_fn, poly_fn = None, poly_value = 1, save = True):
+     """
+     polygonator takes a raster file and returns the polygons that contain the raster features.
+     It tajes as input:
+         raster_fn: raster file name to polygonize
+         poly_fn: name for the shapefile to save the polygons
+         poly_value: the value of the pixels to polygonize (one value, int or float)
+         save: bool, wether to save or not a file with the polygons
+         
+     It returns:
+         a geodataframe with the polygons
+     """
+     
+     with rasterio.open(raster_fn) as src:
+         raster_data = src.read()
+         crs = src.crs
+         gt = src.transform
+         
+     # Generate a list of geometries and their corresponding values (as returned by shapes())
+     features = list(shapes(raster_data, transform=gt))
+     
+     # Filter only the geometries corresponding to wetlands (value 1)
+     features_filt = [x for x in features if x[1] == 1]
+     
+     # Create separate lists for geometries (geom) and their values (vals)
+     geom = [shape(x[0]) for x in features_filt]
+     vals = [x[1] for x in features_filt]
+     
+     # Build the GeoDataFrame and save it as a GeoPackage
+     gdf = gpd.GeoDataFrame(vals, columns=['DN'], geometry=geom)
+     
+     gdf.set_crs(crs, inplace=True)
+     
+     if save: gdf.to_file(poly_fn, index=False)
+ 
+     return gdf
+ 
+ 
+ 
+ def geodf_to_tiff_with_reference_raster(gdf, reference_raster_path, output_path):
+     """
+     Converts a GeoDataFrame to a TIFF file where pixels corresponding to features have a value of 1 and the rest have a value of 0,
+     using the properties of a reference raster.
+ 
+     Parameters:
+     gdf (GeoDataFrame): The input GeoDataFrame containing polygon geometries.
+     reference_raster_path (str): Path to the reference raster file.
+     output_path (str): Path to save the output TIFF file.
+     """
+     # Load the reference raster
+     with rasterio.open(reference_raster_path) as src:
+         ref_transform = src.transform
+         ref_crs = src.crs
+         ref_width = src.width
+         ref_height = src.height
+ 
+     # Ensure the GeoDataFrame is in the same CRS as the reference raster
+     gdf = gdf.to_crs(ref_crs)
+ 
+     # Initialize a numpy array for the raster data
+     raster_data = np.zeros((ref_height, ref_width), dtype=np.uint8)
+ 
+     # Generate a mask of the geometries
+     mask = geometry_mask([geom for geom in gdf.geometry], transform=ref_transform, invert=True, out_shape=(ref_height, ref_width))
+ 
+     # Set the pixels corresponding to the geometries to 1
+     raster_data[mask] = 1
+ 
+     # Save the raster data to a TIFF file
+     with rasterio.open(
+         output_path,
+         'w',
+         driver='GTiff',
+         height=ref_height,
+         width=ref_width,
+         count=1,
+         dtype=raster_data.dtype,
+         crs=ref_crs,
+         transform=ref_transform,
+     ) as dst:
+         dst.write(raster_data, 1)
+ 
+     print(f"Saved raster to {output_path}")
+ 
+ #%% 1) Transform raw LULC classifications to binary (wetland/non-wetland) and filter
+ """****************************************************************************
+ 1) Transform raw LULC classifications to binary (wetland/non-wetland) and filter
+ ****************************************************************************"""
+ #Create directory if it does not exists
+ if not os.path.isdir(binary_dir):
+     os.mkdir(binary_dir)
+ 
+ annual_lulc_fn_list = sorted(os.listdir(annual_lulc_dir))
+ """**** 1-A   Transform each LULC classification to binary and save ******"""
+ for file in annual_lulc_fn_list:
+     if file[-4:] == '.tif': #Only work with tif files
+         print(f'Working on {file}')
+         bin_class_output_fn = os.path.join(binary_dir, file[:-4] + '_binary.tif')
+         source_file = os.path.join(annual_lulc_dir, file)
+         binarize_LULC(source_file, bin_class_output_fn, wetland_class_list, all_non_wetland_class_list)
+     else: 
+         print(f'Skip: {file}')
+         continue
+ 
+ """** 1-B Create one tif file with sum of binary classifications, the frequency and save **"""
+ stack, crs, out_transform = stack_clasif(binary_dir) #add mbb if required
+ binary_sum = np.sum(stack, axis=0)  
+ save_GTiff(binary_sum_fn, crs, out_transform, binary_sum, bandnames=['Binary_sum'])
+ 
+ save_GTiff(wet_freq_fn, crs, out_transform, binary_sum/years_classified, bandnames=['Wetland_frequency'])
+ 
+ #--------------------------Can restart kernel----------------------------------
+ """***** 1-C Filter binary_sum with convolutional filters and save *********"""
+ 
+ with rasterio.open(wet_freq_fn) as src:
+     crs = src.crs
+     gt = src.transform
+     binary_sum = src.read(1) #Lee banda 1
+     out_meta = src.meta
+ 
+ filtered_matrices = []
+     
+ for ks in bksl:
+     circle = make_circle_kernel(ks) #create circle kernel
+     matrix = signal.convolve(binary_sum, circle, mode='same') #Convolve kernel
+     
+     # Apply filter: keep only pixels which kernel sums half of the maximum value it could take
+     # years_classified defines the maximum value the kernel could take
+     matrix_filt = matrix>=((circle).sum()/2)
+     filtered_matrices.append(matrix_filt)
+     
+     #Uncoment next two lines to save each convolutional filter
+     #conv_filt_fn = os.path.join(intermediate_raster_files_dir,fn_prefix + years_covered + '_WetlFreq_ConvK' + str(ks) + running_date +'.tif')
+     #save_GTiff(conv_filt_fn, crs, gt, matrix_filt, bandnames=[f'Kernel size: {ks}'])
+   
+ sum_filters = np.sum(filtered_matrices, axis=0)
+ combined_bin_conv = sum_filters >= len(bksl)-1 
+ 
+ """****** 1-D Filter by clusters: delete little islands or holes *********"""
+ combined_bin_conv_Del30 = filter_clusters(combined_bin_conv, min_wetl_size)
+ combined_bin_conv_Del30_fill10 = filter_clusters(combined_bin_conv_Del30, max_wetl_hole, 
+             save = True, fn_out = wet_freq_filt1_fn, crs = crs, gt = gt, fill_gaps = True) 
+ #%% 2) Generate LULC map and filter by wetland mask
+ """****************************************************************************
+           2) Generate LULC map and filter by wetland mask
+ ****************************************************************************"""
+ 
+ #Create directory if it does not exists
+ if not os.path.isdir(reclassified_dir):
+     os.mkdir(reclassified_dir)
+ 
+ annual_lulc_fn_list = sorted(os.listdir(annual_lulc_dir))
+ """**** 2-A Transform each LULC classification class id to enhance welands *****"""
+ """
+ Reclassification for Tie-Breaking in Mode Calculation
+ 
+ Because the mode algorithm selects the smallest class value in the case of a 
+ tie (e.g., it selects class `3` over `5` when both have the same frequency), 
+ the original LULC classification is reclassified to prioritize wetland classes 
+ over non-wetland ones when such ties occur.
+ The reclassification order is defined by the list `wetland_class_list`, which 
+ should be adjusted according to the specific context or study area.
+ In this process, non-wetland classes are assigned higher numeric values (200 
+ and above) than wetland classes (100 and above) to ensure that, in the event of
+  a draw, the mode algorithm favors wetland categories.
+ """
+ for file in annual_lulc_fn_list:
+     if file[-4:] == '.tif':
+         print(f'Opening: {file}')
+         with rasterio.open(os.path.join(annual_lulc_dir, file)) as src:
+             data = src.read()
+             crs = src.crs
+             gt = src.transform
+             out_meta = src.meta
+ 
+             reclas_data = data.copy()
+ 
+             # mask and relassify wetland classes
+             new_class_value = 100
+             for wet_class in wetland_class_list:
+                 mask_wet = np.isin(data, wet_class)
+                 reclas_data[mask_wet] = new_class_value
+                 new_class_value+=1
+                 
+             # mask and relassify woody class
+             mask_woody = np.isin(data, woody_class)
+             reclas_data[mask_woody] = new_class_value
+             
+             # mask and relassify other non-wetland class
+             new_nw_class_value=200            
+             for nwet_class in non_wetland_class_list_ww:
+                 mask_nwet = np.isin(data, nwet_class)
+                 reclas_data[mask_nwet] = new_nw_class_value
+                 new_nw_class_value+=1
+             
+             data_out = np.vstack(reclas_data)
+             out_fn = os.path.join(reclassified_dir, file[:-4] + '_reclas.tif')
+             save_GTiff(out_fn, crs, gt, data_out, meta={'dtype': np.uint8})
+             
+     else:
+         print(f'Skip: {file}')
+         continue
+ 
+ #Stack reclassified LULC classifications
+ stack, crs, out_transform = stack_clasif(reclassified_dir)
+ 
+ """*********************  Compute mode and save  ***************************"""
+ 
+ mode_freq = compute_mode(stack) #Beware this step is computationally demanding
+ 
+ # Save file with Mode and frequency
+ save_GTiff(mode_fn, crs, out_transform, mode_freq, bandnames=['Class_mode', 'Abs_freq'])
+ 
+ #--------------------------SHOULD restart kernel here -------------------------
+ """************  Filter with wetland mask layer *****************"""
+ 
+ with rasterio.open(mode_fn) as src:
+     data_mode = src.read(1)
+     crs = src.crs
+     gt = src.transform
+     out_meta = src.meta
+     
+ with rasterio.open(wet_freq_filt1_fn) as src:
+     data_filtwetl = src.read()
+     
+ mode_filtwetl = np.vstack(data_mode * data_filtwetl)
+ save_GTiff(mode_filt1_fn, crs, gt, mode_filtwetl, meta={'dtype': np.uint8})
+ 
+ #%% 3) Generate Ponds map
+ """****************************************************************************
+         3) Generate Ponds map
+ ****************************************************************************"""
+ with rasterio.open(mode_filt1_fn) as src:
+     mode_filtwetl = src.read(1)
+     crs = src.crs
+     gt = src.transform
+     out_meta = src.meta
+     
+ """ ************************** CLUSTER FILTERS **************************** """
+ #Delete Ponds clusters smaller than 10 pixels
+ ponds_filt1 = filter_clusters(mode_filtwetl, clust_size=10, class_value= 100) 
+ 
+ #Delete holes within Ponds clussters smaller than 2000 pixels
+ ponds_filt2 = filter_clusters(ponds_filt1, clust_size=2000, fill_gaps = True)
+ 
+ """ ****************** RECURSIVE CONVOLUTIONAL FILTERS ******************** """
+ #These are applied only to this type of wetlands of which a more smooth oulline is expected
+ C2 = make_circle_kernel(ponds_ks) 
+ 
+ M3x=signal.convolve(ponds_filt2, C2, mode='same')
+ M3=M3x>=((C2).sum()/ponds_ks)
+ 
+ M4x=signal.convolve(M3, C2, mode='same')
+ M4=M4x>=((C2).sum()/ponds_ks) 
+ 
+ M5x=signal.convolve(M4, C2, mode='same')    
+ M5=M5x>=((C2).sum()/ponds_ks) 
+ 
+ M6x = M3 + M4 + M5 
+ ponds_filt3 = (M6x > 0)*1
+ 
+ """ *********************** SECOND CLUSTER FILTER ************************* """
+ ponds_filt4_fn = ponds_fn
+ ponds_filt4_shp_fn = ponds_shp_fn
+ 
+ #Delete wetland clusters smaller than 10 pixels + save
+ ponds_filt4 = filter_clusters(ponds_filt3, clust_size=10, save = True, fn_out = ponds_filt4_fn, crs = crs, gt = gt)
+ 
+ #Export as polygon
+ polygonator(ponds_filt4_fn, poly_fn = ponds_filt4_shp_fn, poly_value = 1, save = True)
+ 
+ #%% 4) Generate Artificial wetlands map
+ """****************************************************************************
+         4) Generate Artificial wetlands map
+ ****************************************************************************"""
+ artificial_wetlands_filt2_fn = artificial_wetlands_fn
+ artificial_wetlands_filt2_shp_fn = artificial_wetlands_shp_fn
+ 
+ with rasterio.open(mode_filt1_fn) as src:
+     mode_filtwetl = src.read(1)
+     crs = src.crs
+     gt = src.transform
+     out_meta = src.meta
+     
+ #Delete wetland clusters smaller than 10 pixels
+ artificial_wetlands_filt1 = filter_clusters(mode_filtwetl, clust_size=10, class_value=102) 
+ 
+ #Delete non-wetland clusters within pond-like wetlands smaller than 2000 pixels + save
+ artificial_wetlands_filt2 = filter_clusters(artificial_wetlands_filt1, clust_size=2000, fill_gaps = True, save = True, fn_out = artificial_wetlands_filt2_fn, crs = crs, gt = gt)
+ 
+ #Export as polygon
+ polygonator(artificial_wetlands_filt2_fn, poly_fn = artificial_wetlands_filt2_shp_fn, poly_value = 1, save = True)
+ 
+ #%% 5) Incorporate wetland areas "hidden" by woody covers
+ """****************************************************************************
+         5- Incorporate wetland areas "hidden" by woody covers
+ ****************************************************************************"""
+ 
+ """ ************************ FILTER WOODY COVERS ************************* """
+ Wo_filt2_fn = mode_filt1_fn[:-10] + 'Wofilt2' + running_date + '.tif'
+ Wo_filt2_shp_fn = os.path.join(intermediate_shape_files_dir,mode_filt1_fn.split('/')[1][:-10] + 'Wofilt2' + running_date + '.shp')
+ 
+ with rasterio.open(mode_fn) as src:
+     mode = src.read(1)
+     crs = src.crs
+     gt = src.transform
+     out_meta = src.meta
+ 
+ #Delete woody clusters smaller than 10 pixels
+ Wo_filt1 = filter_clusters (mode, clust_size=10, class_value=103) 
+ 
+ #Delete non-woody clusters smaller than 10 pixels within larger woody clusters 
+ Wo_filt2 = filter_clusters(Wo_filt1, clust_size=10, fill_gaps = True, save = True, fn_out = Wo_filt2_fn, crs = crs, gt = gt)
+ 
+ #Export as polygon
+ Wo_filt2_shp = polygonator(Wo_filt2_fn, poly_fn = Wo_filt2_shp_fn, poly_value = 1, save = True)
+ 
+ """ ********************* FILTER BY RIVER BUFFERS ************************ """
+ river_minbuf_fn = os.path.join(intermediate_shape_files_dir,river_fn[:-4] + f'_buf{max_river_dist}.shp')
+ river_maxbuf_fn = os.path.join(intermediate_shape_files_dir,river_fn[:-4] + f'_buf{mean_fp_ext}.shp')
+ 
+ if not os.path.isfile(river_minbuf_fn):
+     river = gpd.read_file(river_fn)
+     
+     #Create minimum buffer 
+     river_minbuf = (shapely.buffer(river['geometry'], distance = max_river_dist, join_style = 'bevel', cap_style='flat')).to_frame()#Hace buffer fe 20m para la intersección
+     river_minbuf.set_crs(output_shp_crs)
+     river_minbuf.to_file(river_minbuf_fn, index=False, engine='fiona')
+     
+     #Create buffer maximum buffer and save
+     river_maxbuf = (shapely.buffer(river['geometry'], distance = mean_fp_ext, join_style = 'bevel', cap_style='flat')).to_frame()
+     river_maxbuf.set_crs(output_shp_crs)
+     river_maxbuf.to_file(river_maxbuf_fn, index=False, engine='fiona')
+ else:
+     river_minbuf = gpd.read_file(river_minbuf_fn)
+     river_maxbuf = gpd.read_file(river_maxbuf_fn)
+ 
+ # Select features that intersect with min buffer
+ selected_features = Wo_filt2_shp[Wo_filt2_shp.intersects(river_minbuf.unary_union)]
+ 
+ # Clip features to max buffer
+ clipped_w = selected_features.clip(river_maxbuf)
+ 
+ # Save shapefile
+ clipped_w_shp_fn = os.path.join(intermediate_shape_files_dir, fn_prefix + '_16a23_reclas_WoodySel' + running_date +'.shp')
+ clipped_w.set_crs(output_shp_crs)
+ clipped_w.to_file(clipped_w_shp_fn, index=False, engine='fiona')
+ 
+ # Transform to tif and save
+ geodf_to_tiff_with_reference_raster(clipped_w, binary_sum_fn, clipped_w_raster_fn)
+ 
+ #--------------------------Can restart kernel----------------------------------
+ """ ********************** FILTER CLUSTERS and SAVE *********************** """
+ with rasterio.open(clipped_w_raster_fn) as src:
+     data_w = src.read(1)
+     crs = src.crs
+     gt = src.transform
+     out_meta = src.meta
+ 
+ clipped_w_filt_raster_fn = wo_fn
+ clipped_w_filt = filter_clusters(data_w, 10, fill_gaps = True, save = True, fn_out = clipped_w_filt_raster_fn, crs = crs, gt = gt)
+ 
+ #%% 6) Merge all wetland types
+ """ **************************************************************************** 
+                             MERGE ALL WETLAND TYPES
+ **************************************************************************** """
+ #Polygonize river chanel layer if it is not done
+ if not os.path.isfile(river_fn.split('.')[0]+'.tif'):
+     gdf = gpd.read_file(river_fn)
+     geodf_to_tiff_with_reference_raster(gdf, wet_freq_filt1_fn, river_fn.split('.')[0]+'.tif')
+ 
+ #Open every layer
+ with rasterio.open(wet_freq_filt1_fn) as src:
+     data_wetl = src.read()
+     crs = src.crs
+     gt = src.transform
+     out_meta = src.meta
+     
+ with rasterio.open(ponds_fn) as src:
+     data_ponds = src.read()
+ 
+ with rasterio.open(artificial_wetlands_fn) as src:
+     data_aw = src.read()
+     
+ with rasterio.open(wo_fn) as src:
+     data_wo = src.read()
+     
+ with rasterio.open(river_fn.split('.')[0]+'.tif') as src:
+     data_riv = src.read()    
+ 
+ """**************** Save as wetland vs non-wetland map ****************"""  
+ merged = ((data_wetl + data_ponds + data_aw + data_wo + data_riv)>0)*1 
+ merged_stack = np.vstack(merged)
+ 
+ #FILTER AND SAVE 
+ wet_freq_filt1_fn_merge = all_wl_ud_fn
+ filtro_gaps = filter_clusters(merged_stack, 20, fill_gaps = True, save = True, fn_out = wet_freq_filt1_fn_merge, crs = crs, gt = gt)
+ 
+ #POLYGONIZE AND SAVE 
+ poly_fn = all_wl_ud_shp_fn
+ polygonator(all_wl_ud_fn, poly_fn = poly_fn, poly_value = 1, save = True)
+ 
+ """**************** Generate and save Wetlands map ****************""" 
+ 
+ #Give all wetlands value 2 (Wet meadows)
+ reclas_data = filtro_gaps.copy()*2
+ 
+ #Assign value "1" to Ponds
+ mask_wet1 = np.isin(data_ponds, 1)
+ reclas_data[mask_wet1[0]] = 1
+ 
+ #Assign value "3" to Artificial wetlands
+ mask_wet3 = np.isin(data_aw, 1)
+ reclas_data[mask_wet3[0]] = 3
+ 
+ #Assign value "4" to Rivers
+ mask_wet4 = np.isin(data_riv, 1)
+ reclas_data[mask_wet4[0]] = 4
+ 
+ save_GTiff(all_wl_d_fn, crs, gt, reclas_data, meta={'dtype': np.uint8}) #Save
