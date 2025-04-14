@@ -1,0 +1,134 @@
+/*==============================================================================================
+   TITLE: Sentinel 1 preprocessing for Wetland-oriented LULC classification
+   AUTHORS: Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R.
+   EMAIL: lmigone@unsam.edu.ar
+   LICENSE: GNU AGPL v3.0
+   DATE: April 2025
+   For a detailed explanation of the methodology, please refer to the associated paper:
+   PENDING PUBLICATION.
+   
+   DESCRIPTION: This script generates and exports the SAR input for the wetland-oriented LULC classification.
+   It preprocesses Sentinel-1 images following the protocol of Mullissa et al. (2021). Then, it 
+   computes seasonal and annual descriptors and saves them as assets.
+ 
+ ==============================================================================================*/
+ var roi = '' #Import or define FeatureCollection with ROI
+ 
+ //Requirements
+ var wrapper = require('users/adugnagirma/gee_s1_ard:wrapper');
+ var helper = require('users/adugnagirma/gee_s1_ard:utilities'); 
+ 
+ //----------------------------------------------------------------------------------------------
+ //  SECTION 1 - General Settings
+ //----------------------------------------------------------------------------------------------
+ // Define classification period (year1 = starting year, year2 = finishing year)
+ var year1 = 2023; 
+ var year2 = year1 + 1;
+ var startDate = year1+'-06-21';
+ var endDate = year2+'-06-20';
+ 
+ //Set filenames and paths
+ var classYear = year1.toString(); 
+ var runningDate = '20250321'; //Set up date to keep track of work
+ var outputFolder = 'wetland-lulc-2025/';  // Name of assets folder where to export SAR images
+ var outputImageName = 'S1Bands_' + classYear + '_' + runningDate; //Filename of output S1 derived image
+ 
+ // Set CRS to export S1 products
+ var targetCrs = 'EPSG:32721'; 
+ 
+ //----------------------------------------------------------------------------------------------
+ //  SECTION 1 - Sentinel 1 preprocessing
+ //----------------------------------------------------------------------------------------------
+   // Define S1 preprocessing parameters, as per:
+   // Version: v1.2
+   // Date: 2021-03-10
+   // Authors: Mullissa A., Vollrath A., Braun, C., Slagter B., Balling J., Gou Y., Gorelick N.,  Reiche J.
+   // Sentinel-1 SAR Backscatter Analysis Ready Data Preparation in Google Earth Engine. Remote Sensing 13.10 (2021): 1954.
+   // Description: This script creates an analysis ready S1 image collection.
+   // License: This code is distributed under the MIT License.
+ var dem = ee.ImageCollection("JAXA/ALOS/AW3D30/V3_2").select("DSM");
+ dem = dem.mosaic().setDefaultProjection(dem.first().select(0).projection());
+ 
+ var parameter = {//1. Data Selection
+                  START_DATE: startDate,
+                  STOP_DATE: endDate,
+                  POLARIZATION:'VVVH', // The polarization available may differ depending on where you are on the globe
+                  ORBIT : 'DESCENDING', // The orbit availability may differ depending on where you are on the globe
+                  // Check out this page to find out what parameters suit your area:
+                  // https://sentinels.copernicus.eu/web/sentinel/missions/sentinel-1/observation-scenario
+                  GEOMETRY: roi,
+                  //2. Additional Border noise correction
+                  APPLY_ADDITIONAL_BORDER_NOISE_CORRECTION: true,
+                  //3.Speckle filter
+                  APPLY_SPECKLE_FILTERING: true,
+                  SPECKLE_FILTER_FRAMEWORK: 'MULTI',
+                  SPECKLE_FILTER: 'LEE',
+                  SPECKLE_FILTER_KERNEL_SIZE: 9,
+                  SPECKLE_FILTER_NR_OF_IMAGES: 10,
+                  //4. Radiometric terrain normalization
+                  APPLY_TERRAIN_FLATTENING: true,
+                  DEM: dem,
+                  TERRAIN_FLATTENING_MODEL: 'VOLUME', // More desirable for vegetation monitoring.
+                                                      //Use "SURFACE" if working on urban or bare soil applications
+                  TERRAIN_FLATTENING_ADDITIONAL_LAYOVER_SHADOW_BUFFER: 0,
+                  //5. Output
+                  FORMAT : 'DB',
+                  CLIP_TO_ROI: false,
+                  SAVE_ASSETS: false
+ };
+   
+   //Preprocess the S1 collection
+ var s1Raw = wrapper.s1_preproc(parameter)[1]
+               .map(function(image){return image.multiply(1000).toInt16() // Convert to Int16 using 10000 scaling factor
+                                           .set({'system:time_start': image.get('system:time_start')})});
+ var ratio = s1Raw.map(helper.add_ratio_lin).map(helper.lin_to_db2).filterBounds(roi);
+ var s1 = s1Raw.filterBounds(roi);
+ 
+ 
+ //----------------------------------------------------------------------------------------------
+ //  SECTION 3 - SENTINEL 1 PROCESSING
+ //----------------------------------------------------------------------------------------------
+ //Anual descriptors
+ var s1AnMean = s1.select('VV','VH').mean().rename('VV_anual', 'VH_anual');
+ var s1AnStd = s1.select('VV','VH').reduce(ee.Reducer.stdDev()).rename('VV_sd_anual','VH_sd_anual');
+ var s1RatioAnMean = ratio.select('VVVH_ratio').mean().double().rename('Ratio_anual');
+ var s1RatioAnStd = ratio.select('VVVH_ratio').reduce(ee.Reducer.stdDev()).rename('Ratio_sd_anual');
+ var s1Annual = s1AnMean.addBands(s1AnStd).addBands(s1RatioAnMean).addBands(s1RatioAnStd);
+ 
+ //Winter descriptors
+ var s1WiMean = s1.filterDate(year1+'-06-21',year1+'-09-20').select('VV','VH').mean().rename('VV_inv','VH_inv');
+ var s1RatioWiMean = ratio.filterDate(year1+'-06-21',year1+'-09-20').select('VVVH_ratio').mean().double().rename('Ratio_inv');
+ var s1Winter = s1WiMean.addBands(s1RatioWiMean);
+ 
+ //Spring descriptors
+ var s1SpMean    = s1.filterDate(year1+'-09-21',year1+'-12-20').select('VV','VH').mean().rename('VV_prim','VH_prim');
+ var s1RatioSpMean = ratio.filterDate(year1+'-09-21',year1+'-12-20').select('VVVH_ratio').mean().double().rename('Ratio_prim');
+ var s1Spring = s1SpMean.addBands(s1RatioSpMean);
+ 
+ //Summer descriptors
+ var s1SuMean = s1.filterDate(year1+'-12-21',year2+'-03-20').select('VV','VH').mean().rename('VV_ver','VH_ver');
+ var s1RatioSuMean = ratio.filterDate(year1+'-12-21',year2+'-03-20').select('VVVH_ratio').mean().double().rename('Ratio_ver');
+ var s1Summer = s1SuMean.addBands(s1RatioSuMean);
+ 
+ //Autumn descriptors
+ var s1AuMean = s1.filterDate(year2+'-03-21',year2+'-06-20').select('VV','VH').mean().rename('VV_oto','VH_oto');
+ var s1RatioAuMean = ratio.filterDate(year2+'-03-21',year2+'-06-20').select('VVVH_ratio').mean().double().rename('Ratio_oto');
+ var s1Autumn = s1AuMean.addBands(s1RatioAuMean);
+ 
+ // Make one image
+ var s1Output = s1Annual.addBands(s1Winter).addBands(s1Spring).addBands(s1Summer).addBands(s1Autumn);
+ 
+ //----------------------------------------------------------------------------------------------
+ //  SECTION 4 - EXPORT RESULTS TO GEE ASSETS
+ //----------------------------------------------------------------------------------------------
+ 
+ Export.image.toAsset({
+     image: s1Output, 
+     description: outputImageName, 
+     assetId: outputFolder + outputImageName,
+     pyramidingPolicy: {".default": "mean"}, 
+     region: roi, 
+     scale: 10,
+     maxPixels: 1e13,
+     crs: targetCrs
+ });
