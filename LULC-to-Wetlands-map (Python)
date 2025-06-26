@@ -102,7 +102,7 @@ TITLE: LULC to wetlands map - Python module for post-processing LULC classificat
  intermediate_raster_files_dir = annual_lulc_dir + '_intermidiate-tifs'
  intermediate_shape_files_dir = annual_lulc_dir + '_intermidiate-shapefiles'
  final_raster_files_dir = annual_lulc_dir + '_final-tifs'
- final_shape_files_dir = annual_lulc_dir + '_final-shapefiles'
+ final_shapefiles_dir = annual_lulc_dir + '_final-shapefiles'
  
  #Frequency map and Wetlands mask
  binary_sum_fn = os.path.join(intermediate_raster_files_dir,fn_prefix + years_covered + '_BinSum' + running_date +'.tif') #Raw binary sum fn
@@ -115,20 +115,20 @@ TITLE: LULC to wetlands map - Python module for post-processing LULC classificat
  
  #Ponds map
  ponds_fn = os.path.join(final_raster_files_dir, fn_prefix + years_covered + '_reclas_len_ModeFreq_FiltWetl_PLWfilt4' + running_date + '.tif') #Final Ponds map (raster)
- ponds_shp_fn = os.path.join(final_shape_files_dir, fn_prefix + years_covered + '_reclas_len_ModeFreq_FiltWetl_PLWfilt4' + running_date + '.shp') #Final Ponds map (vector)
+ ponds_shp_fn = os.path.join(final_shapefiles_dir, fn_prefix + years_covered + '_reclas_len_ModeFreq_FiltWetl_PLWfilt4' + running_date + '.shp') #Final Ponds map (vector)
  
  #Artificial wetlands map
  artificial_wetlands_fn = os.path.join(final_raster_files_dir, fn_prefix + years_covered + '_reclas_len_ModeFreq_FiltWetlAWfilt2' + running_date + '.tif') #Final Artificial wetlands map (raster)
- artificial_wetlands_shp_fn = os.path.join(final_shape_files_dir, fn_prefix + years_covered + '_reclas_len_ModeFreq_FiltWetlAWfilt2' + running_date + '.shp') #Final Artificial wetlands (vector)
+ artificial_wetlands_shp_fn = os.path.join(final_shapefiles_dir, fn_prefix + years_covered + '_reclas_len_ModeFreq_FiltWetlAWfilt2' + running_date + '.shp') #Final Artificial wetlands (vector)
  
  wo_fn = os.path.join(intermediate_raster_files_dir, fn_prefix + years_covered + '_reclas_WoodySel_Filt' + running_date +'.tif') #Woody floodplain wetland areas (raster)
  clipped_w_raster_fn = os.path.join(intermediate_raster_files_dir, fn_prefix + years_covered + '_reclas_WoodySel' + running_date +'.tif')
  
  #Wetlands map
  all_wl_ud_fn = os.path.join(final_raster_files_dir, fn_prefix + years_covered + '_BinSum_Convx5_bin_Del30Fill10_mergeFill20_W-NW' + running_date + '.tif') #All wetlands merged (raster)
- all_wl_ud_shp_fn = os.path.join(final_shape_files_dir, fn_prefix + years_covered + '_BinSum_Convx5_bin_Del30Fill10_mergeFill20_W-NW' + running_date + '.shp') #All wetlands merged (vector)
+ all_wl_ud_shp_fn = os.path.join(final_shapefiles_dir, fn_prefix + years_covered + '_BinSum_Convx5_bin_Del30Fill10_mergeFill20_W-NW' + running_date + '.shp') #All wetlands merged (vector)
  all_wl_d_fn = os.path.join(final_raster_files_dir, fn_prefix + years_covered + '_BinSum_Convx5_bin_Del30Fill10_mergeFill20_WTypes' + running_date + '.tif') #All wetlands diferenciated (raster)
- all_wl_d_shp_fn = os.path.join(final_shape_files_dir, fn_prefix + years_covered + '_BinSum_Convx5_bin_Del30Fill10_mergeFill20_WTypes' + running_date + '.shp') #All wetlands diferenciated (vector)
+ all_wl_d_shp_fn = os.path.join(final_shapefiles_dir, fn_prefix + years_covered + '_BinSum_Convx5_bin_Del30Fill10_mergeFill20_WTypes' + running_date + '.shp') #All wetlands diferenciated (vector)
  
  
  #Create directories if needed
@@ -141,8 +141,11 @@ TITLE: LULC to wetlands map - Python module for post-processing LULC classificat
  if not os.path.isdir(final_raster_files_dir):
      os.mkdir(final_raster_files_dir)
      
- if not os.path.isdir(final_shape_files_dir):
-     os.mkdir(final_shape_files_dir)
+ if not os.path.isdir(final_shapefiles_dir):
+     os.mkdir(final_shapefiles_dir)
+ 
+ if not os.path.isdir(reclassified_dir):
+     os.mkdir(reclassified_dir)
      
  #%% 0) Definition of functions to use - ALWAYS RUN
  def binarize_LULC(input_file, output_file, wetland_class_list, all_non_wetland_class_list):
