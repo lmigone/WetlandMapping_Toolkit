@@ -1,7 +1,7 @@
 # WetlandMapping_Toolkit
 ## Mapping Drier-End Wetlands Using Land Use/Land Cover (LULC) Classifications
 
-This repository contains Google Earth Engine (GEE) and Python code for drier-end wetland mapping:
+This repository contains Google Earth Engine (GEE) and Python code for drier-end wetland mapping in urban/peri-urban areas:
 
 Authors: **Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R. (2025)**
 
