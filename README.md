@@ -8,7 +8,7 @@ Authors: **Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R. (20
 ## Repository Overview
 
 ### GEE Code
-This repository contains two Google Earth Engine (GEE) scripts: **S1-preproc-Wetland-LULC** and **Annual-Wetland-LULC**. Both scripts generate annual and seasonal features for a single year, with the default period running from June 21st (the start of winter in the Southern Hemisphere) to June 20th of the following year (the end of autumn). Each script should be run once per year to generate its Land Use/Land Cover (LULC) classification.
+This repository contains two Google Earth Engine (GEE) scripts: **S1-preproc-Wetland-LULC** and **Annual-Wetland-LULC**. Both scripts generate annual and seasonal features for a single year, with the default period running from June 21st (the start of winter in the Southern Hemisphere) to June 20th of the following year (the end of autumn). Each script should be run once per year to generate its Annual Land Use/Land Cover (LULC) map.
 
 #### S1-preproc-Wetland-LULC
 This script preprocesses Sentinel-1 imagery by applying:
@@ -37,7 +37,7 @@ This script generates the LULC classification using a **Random Forest classifier
 
 2. **Training and Test Points:**
    - **Initial Training and Test Points**: Must be uploaded and imported from GEE Assets. The methodology for generating them is user-defined.
-   - **Complementary Training Points**: Generated manually through visual interpretation of the LULC classification and used iteratively to correct classification errors until achieving acceptable accuracy.
+   - **Complementary Training Points**: Generated manually through visual interpretation of the Annual LULC maps and used iteratively to correct classification errors until achieving acceptable accuracy.
 
 3. **Output Files:**  
    The script exports results to a Google Drive output folder, generating:
@@ -45,9 +45,9 @@ This script generates the LULC classification using a **Random Forest classifier
    - **CSV file** – Feature importance values from the Random Forest model.
 
 ### Python Code - LULCtoWetlandsMaps_Postprocesing
-The Python script processes a series of wetland-oriented LULC classifications to generate a final wetlands map.
+The Python script processes a series of wetland-oriented LULC maps to generate a final wetlands map.
 
-**NOTE 1**: This script is set to work with **8 LULC classifications (8 years classified)**, each containing **8 LULC classes**. However, it can be adapted for a different number of years or classes.  
+**NOTE 1**: This script is set to work with **8 Annual LULC maps (8 years classified)**, each containing **8 LULC classes**. However, it can be adapted for a different number of years or classes.  
 
 **NOTE 2**: Due to the high RAM usage of some steps, it is **recommended not to run the entire script at once**, but rather in stages (as suggested in comments within the script).
 
