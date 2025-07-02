@@ -1,51 +1,51 @@
 TITLE: LULC to wetlands map - Python module for post-processing LULC classifications
- AUTHORS: Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R.
- EMAIL: lmigone@unsam.edu.ar
- LICENSE: GNU AGPL v3.0
- DATE: April 2025
- For a detailed explanation of the methodology, please refer to the associated paper:
- PENDING PUBLICATION.
- 
- ## Script summary:
- 
- This Python script performs the complete post-processing workflow to transform 
- a series of annual Land Use/Land Cover (LULC) classifications into a final 
- Wetland Map.
- It is specifically adapted for a classification scheme with 8 LULC classes 
- (`LULC_classes`) across 8 years, but it can be modified to accommodate other 
- class counts or time spans.
- Due to the memory-intensive nature of some processing steps, it is **recommended 
- to execute the script in stages**, as suggested in the inline comments.
- 
- ### Input: File Names and Directories
- 
- - `source`: `{str}` Path to the main working directory.
- - `annual_lulc_dir`: `{str}` Directory containing annual LULC maps as GeoTIFF files.
- - `fn_prefix`: `{str}` Prefix to use in naming output files.
- - `years_covered`: `{str}` Suffix to include in filenames to represent the years included (use `''` to leave empty).
- - `running_date`: `{str}` A string used to tag the version or date of execution (e.g., `'2025-04'`).
- - `river_fn`: `{str}` Filename of the shapefile containing river outlines.
- - `output_shp_crs`: `{str}` Target coordinate reference system for shapefile outputs (e.g., `'EPSG:32721'`).
- 
- ### Input: Filtering Parameters
- 
- - `years_classified`: `{int}` Number of years with classified LULC data.
- - `min_wetl_size`: `{int}` Minimum area (in pixels) for a wetland unit to be retained in the final mask.
- - `max_wetl_hole`: `{int}` Maximum area (in pixels) of a non-wetland "hole" allowed within wetland units.
- - `mean_fp_ext`: `{int}` Approximate average width (in meters) of floodplain zones considered for woody floodplain wetlands.
- - `max_river_dist`: `{int}` Maximum buffer distance (in meters) from rivers to search for woody wetland patches.
- - `bksl`: `{list[int]}` List of kernel sizes to apply during morphological filtering of binary wetland masks.
- - `ponds_ks`: `{int}` Kernel size for pond filtering.
- 
- ### Input: LULC Class Information
- 
- - `wetland_class_list`: `{list[int]}` List of pixel values corresponding to wetland classes (e.g., `[2, 4, 8]`). The order reflects priority in mode-based reclassification.
- - `all_non_wetland_class_list`: `{list[int]}` List of all non-wetland class pixel values (e.g., `[1, 3, 5, 6, 7]`).
- - `non_wetland_class_list_ww`: `{list[int]}` Non-wetland class values **excluding** woody vegetation (e.g., `[1, 3, 6, 7]`).
- - `woody_class`: `{int}` Pixel value corresponding to woody vegetation (e.g., `5`).
- - `artificial_wetland_class`: `{int}` Pixel value representing artificial wetland classes.
- 
- """
+AUTHORS: Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R.
+EMAIL: lmigone@unsam.edu.ar
+LICENSE: GNU AGPL v3.0
+DATE: April 2025
+For a detailed explanation of the methodology, please refer to the associated paper:
+PENDING PUBLICATION.
+
+## Script summary:
+
+This Python script performs the complete post-processing workflow to transform 
+a series of annual Land Use/Land Cover (LULC) classifications into a final 
+Wetland Map.
+It is specifically adapted for a classification scheme with 8 LULC classes 
+(`LULC_classes`) across 8 years, but it can be modified to accommodate other 
+class counts or time spans.
+Due to the memory-intensive nature of some processing steps, it is **recommended 
+to execute the script in stages**, as suggested in the inline comments.
+
+### Input: File Names and Directories
+
+- `source`: `{str}` Path to the main working directory.
+- `annual_lulc_dir`: `{str}` Directory containing annual LULC maps as GeoTIFF files.
+- `fn_prefix`: `{str}` Prefix to use in naming output files.
+- `years_covered`: `{str}` Suffix to include in filenames to represent the years included (use `''` to leave empty).
+- `running_date`: `{str}` A string used to tag the version or date of execution (e.g., `'2025-04'`).
+- `river_fn`: `{str}` Filename of the shapefile containing river outlines.
+- `output_shp_crs`: `{str}` Target coordinate reference system for shapefile outputs (e.g., `'EPSG:32721'`).
+
+### Input: Filtering Parameters
+
+- `years_classified`: `{int}` Number of years with classified LULC data.
+- `min_wetl_size`: `{int}` Minimum area (in pixels) for a wetland unit to be retained in the final mask.
+- `max_wetl_hole`: `{int}` Maximum area (in pixels) of a non-wetland "hole" allowed within wetland units.
+- `mean_fp_ext`: `{int}` Approximate average width (in meters) of floodplain zones considered for woody floodplain wetlands.
+- `max_river_dist`: `{int}` Maximum buffer distance (in meters) from rivers to search for woody wetland patches.
+- `bksl`: `{list[int]}` List of kernel sizes to apply during morphological filtering of binary wetland masks.
+- `ponds_ks`: `{int}` Kernel size for pond filtering.
+
+### Input: LULC Class Information
+
+- `wetland_class_list`: `{list[int]}` List of pixel values corresponding to wetland classes (e.g., `[2, 4, 8]`). The order reflects priority in mode-based reclassification.
+- `all_non_wetland_class_list`: `{list[int]}` List of all non-wetland class pixel values (e.g., `[1, 3, 5, 6, 7]`).
+- `non_wetland_class_list_ww`: `{list[int]}` Non-wetland class values **excluding** woody vegetation (e.g., `[1, 3, 6, 7]`).
+- `woody_class`: `{int}` Pixel value corresponding to woody vegetation (e.g., `5`).
+- `artificial_wetland_class`: `{int}` Pixel value representing artificial wetland classes.
+
+"""
  
 #%% 0) Imports - ALWAYS RUN
 import os
