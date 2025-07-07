@@ -3,7 +3,7 @@
    AUTHORS: Migone, L., Schivo, F., Verón, S., Banchero, S., and Grimson, R.
    EMAIL: lmigone@unsam.edu.ar
    LICENSE: GNU AGPL v3.0
-   DATE: April 2025
+   DATE: July 2025
    For a detailed explanation of the methodology, please refer to the associated paper:
    PENDING PUBLICATION.
    
@@ -29,12 +29,12 @@ var endDate = year2+'-06-20';
 
 //Set filenames and paths
 var classYear = year1.toString(); 
-var runningDate = '20250321'; //Set up date to keep track of work
-var outputFolder = 'wetland-lulc-2025/';  // Name of assets folder where to export SAR images
-var outputImageName = 'S1Bands_' + classYear + '_' + runningDate; //Filename of output S1 derived image
+var runningDate = ''; //Set up date to keep track of work
+var outputFolder = '';  // Name of assets folder where to export SAR images
+var outputImageName = '' + classYear + '_' + runningDate; //Filename of output S1 derived image
 
 // Set CRS to export S1 products
-var targetCrs = 'EPSG:32721'; 
+var targetCrs = ''; 
  
 //----------------------------------------------------------------------------------------------
 //  SECTION 1 - Sentinel 1 preprocessing
