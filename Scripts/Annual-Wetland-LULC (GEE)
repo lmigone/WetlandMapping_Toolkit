@@ -102,7 +102,8 @@ function maskS2clouds(image) {
 var S2 = ee.ImageCollection("COPERNICUS/S2_HARMONIZED")
    .filterDate(startDate,endDate)
    .filterBounds(roi)
-   .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', cloudThreshold));
+   .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', cloudThreshold))
+   .map(maskS2clouds);
    
 //Define function to compute indices
 function addIndex(image) {  
